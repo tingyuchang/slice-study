@@ -13,3 +13,9 @@ func BenchmarkDeleteByCopy(b *testing.B) {
 		DeleteByCopy(5, xi)
 	}
 }
+
+func BenchmarkDeleteWithoutServingOrder(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		DeleteWithoutServingOrder(5, xi)
+	}
+}

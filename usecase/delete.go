@@ -11,3 +11,9 @@ func DeleteByCopy(index int, x []interface{}) interface{} {
 	x[len(x)-1] = nil
 	return x[:len(x)-1]
 }
+
+func DeleteWithoutServingOrder(index int, x []interface{}) interface{} {
+	x[index] = x[len(x)-1]
+	x[len(x)-1] = nil
+	return x[:len(x)-1]
+}
