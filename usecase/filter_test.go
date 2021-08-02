@@ -41,3 +41,27 @@ func TestFilter(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkFilter(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		filterTestData := []interface{}{1,2,3,4,5,6,7,8,9,0,11,12,13}
+		Filter(filterTestData, func(i interface{}) bool {
+			if i.(int) %2 == 0 {
+				return false
+			}
+			return true
+		})
+	}
+}
+
+func BenchmarkFilter2(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		filterTestData := []interface{}{1,2,3,4,5,6,7,8,9,0,11,12,13}
+		Filter2(filterTestData, func(i interface{}) bool {
+			if i.(int) %2 == 0 {
+				return false
+			}
+			return true
+		})
+	}
+}
