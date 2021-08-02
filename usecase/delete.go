@@ -12,6 +12,8 @@ func DeleteByCopy(index int, x []interface{}) interface{} {
 	return x[:len(x)-1]
 }
 
+// DeleteWithoutServingOrder is replace target item with latest item in slice
+// and assign latest one to nil
 func DeleteWithoutServingOrder(index int, x []interface{}) interface{} {
 	x[index] = x[len(x)-1]
 	x[len(x)-1] = nil
