@@ -63,7 +63,7 @@ c := a[3:] // [3,4,5,6,7,8,9] len: 7 cap: 7
 b[3] = 20 // panic: runtime error: index out of range [3] with length 3
 ```
 
-雖然 b 的 cap 是 7 ，但是 len 只有 3 因此如果直接 assign [3] 會造成 panic error。那麼我們要怎麼擴充 b 呢？有三個方法： append, copy and reslice
+雖然 b 的 cap 是 7 ，但是 len 只有 3 因此如果直接 assign [3] 會造成 panic error。那麼我們要怎麼擴充 b 呢？有三個方法： append, copy and re-slice
 
 ```go
 // append
@@ -73,14 +73,16 @@ b = append(b, item)
 
 b2 := make([]int, len(b)+1)
 copy(b2. b)
+b2[len(b)] = item
 
 //re-slice
 b = [:len(b)+1]
+b[len(b)] = item
 ```
 
-append 比較簡單也常用，如果要在 slice 尾端增加元素，可以直接使用 append:
+append 比較簡單也常用。copy 要注意到 underlying array 是不同的，在某些情況下，使用 copy 來 insert 會比 append 來得有效率 ([slice tricks](https://github.com/golang/go/wiki/SliceTricks) 中有提到，之後會再說明)。re-slice 也很直覺易懂，不過要注意到 capacity 是否足夠，否則是會產生 runtime error 的。
 
-但是要注意到 b 的 underlyig array 也會同時被修改這一點
+值得一提的是使用 append or re-slice 要注意到 b 的 underlying array 也會被修改這一點
 
 ```go
 b = append(b, 20)
@@ -92,14 +94,16 @@ b = append(b, 20)
 // a = [0,1,2,3,4,5,20.7,8,9]
 ```
 
-在講解為什麼之前，想請大家再看一段程式碼：
+在 underlying array 有足夠的 capacity 下，會做一次的 re-slice 並將新的元素放置進去，因此 underlying array 中的元素就會被置換，連帶影響到其他指向這個 array 的 slices。
+
+但如果 underlying array 沒有足夠的 capacity 呢？ 請大家再看一段程式碼：
 
 ```go
 c = append(c, 20)
+// [3,4,5,6,7,8,9,20]
 b = b[:cap(b)]
+// [3,4,5,6,7,8,9]
 ```
-
-請問 a, b, c 分別最後是多少呢？這邊先不公佈答
 
 想要知道其中運作的原理，要先從 [growslice](https://github.com/golang/go/blob/4bb0847b088eb3eb6122a18a87e1ca7756281dcc/src/runtime/slice.go#L162) 這一段 source code 來下手。
 
@@ -121,7 +125,38 @@ b = b[:cap(b)]
 
 計算完新的 cap 之後，就會把目前 array 內的元素複製到新的 array 中
 
+所以當 c 要擴充的時候，因為 underlying array 的 capacity 已經不夠了，因此重新產生了一組新的 underlying array 給他，這個時候 b, c 兩者的 underlying array 已經不同了。
+
+## Call by Value
+
+```go
+func main() {
+	a := [10]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+
+	b := a[3:6]
+	c := a[3:]
+	double(b)
+	fmt.Println(b) // [6 8 10]
+	fmt.Println(c) // [6 8 10 6 7 8 9]
+}
+func double(x []int) {
+	for i, v := range x {
+		x[i] = v * 2
+	}
+}
+```
+
+在 Golang 的世界裡面都是 call by value ，slice 也不例外，但是為什麼上面的程式碼 double 卻會影響到 c 呢？這是因為在傳遞 b 給 double 的時候，的確是複製了一份 b 的值，但是 b 的 slice (struct) 只有 ptr, len 以及 cap ，並沒有真正的持有元素，而複製出來的 slice 也指向了同樣的 underlying array ，所以在 double 裡面修改了元素，就會影響到 c。 
+
+不過要利用這個特性必須要注意到改變 slice 的長度時 (append, re-slice or copy) 都會讓新的 slice 的 underlying array 變成新的，因此可能就會發生在新的 slice 中修改，但是其他地方的 slice 因為兩者的 underlying array 不一樣了，造成修改是無效的，要怎麼避免這個情況發生呢？有一個作法是 Slice of Pointers，也就是只傳遞指標，而不是數據本身，如此一來即使 underlying array 的元素被複製了，也還是指向相同的數據，但是使用 slice of pointers 有什麼好處與壞處呢？下一段我們將會來討論其優缺點。
+
+## Slice of pointers vs Slice of structs
+
 ### Reference
 
 - https://blog.golang.org/slices-intro
 - https://github.com/golang/go/wiki/SliceTricks
+- [https://medium.com/swlh/golang-tips-why-pointers-to-slices-are-useful-and-how-ignoring-them-can-lead-to-tricky-bugs-cac90f72e77b](https://medium.com/swlh/golang-tips-why-pointers-to-slices-are-useful-and-how-ignoring-them-can-lead-to-tricky-bugs-cac90f72e77b)
+- [https://medium.com/@opto_ej/there-are-other-nuances-one-should-consider-c798f12be15c](https://medium.com/@opto_ej/there-are-other-nuances-one-should-consider-c798f12be15c)
+- [https://philpearl.github.io/post/bad_go_slice_of_pointers/](https://philpearl.github.io/post/bad_go_slice_of_pointers/)
+-
