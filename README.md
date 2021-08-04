@@ -148,9 +148,221 @@ func double(x []int) {
 
 在 Golang 的世界裡面都是 call by value ，slice 也不例外，但是為什麼上面的程式碼 double 卻會影響到 c 呢？這是因為在傳遞 b 給 double 的時候，的確是複製了一份 b 的值，但是 b 的 slice (struct) 只有 ptr, len 以及 cap ，並沒有真正的持有元素，而複製出來的 slice 也指向了同樣的 underlying array ，所以在 double 裡面修改了元素，就會影響到 c。 
 
-不過要利用這個特性必須要注意到改變 slice 的長度時 (append, re-slice or copy) 都會讓新的 slice 的 underlying array 變成新的，因此可能就會發生在新的 slice 中修改，但是其他地方的 slice 因為兩者的 underlying array 不一樣了，造成修改是無效的，要怎麼避免這個情況發生呢？有一個作法是 Slice of Pointers，也就是只傳遞指標，而不是數據本身，如此一來即使 underlying array 的元素被複製了，也還是指向相同的數據，但是使用 slice of pointers 有什麼好處與壞處呢？下一段我們將會來討論其優缺點。
+不過要利用這個特性必須要注意到改變 slice 的長度時 (append, re-slice or copy) 都會讓新的 slice 的 underlying array 變成新的，因此可能就會發生在新的 slice 中修改，但是其他地方的 slice 因為兩者的 underlying array 不一樣了，造成修改是無效的，要怎麼避免這個情況發生呢？可以參考以下的思考：
+
+1. 避免改變 slice ，當 slice 被當作參數傳遞之後，不嘗試做任何 len or cap 的修改，不讓 realloc 的情況發生，也許有人會認為只要熟悉 slice 的原理，小心操作就不會有這個問題產生，但是你要怎麼保證其他人不會踩到這個陷阱呢？請思考以下的程式碼：
+
+    ```go
+    // 這個例子是要證明操作 append 的先後順序，其實對外面的 xs 影響極大
+    // 先進行 append 的話，造成 alloc new underlying array，之後再對 xs2 進行的操作
+    // 就跟外面的 xs 無關了。反過來，如果先進行操作，再進行 append ，那麼
+    //  xs2[0] = 1
+    //  xs2[1] = 2
+    // 這兩個都會影響到原本的 xs ，因為這時候 xs & xs2 都還是同一個 underlying array
+    func main() {
+    	xs := make([]int, 1, 3)
+    	func(xs2 []int) {
+    	    xs2 = xs2[1:3]
+    	    // xs2 = append(xs2, 3)
+    			xs2[0] = 1
+    	    xs2[1] = 2
+    	    xs2 = append(xs2, 3)
+    		fmt.Printf("Inside: %v Addr of slice: %p\n", xs2, &xs2)		
+    	}(xs)
+    	xs = xs[:cap(xs)]
+    	fmt.Printf("Outside: %v Addr of slice: %p\n", xs, &xs)
+    }
+    ```
+
+    看過了上面的例子就知道，這樣的錯誤要 debug 是極為困難的。
+
+    函式的撰寫者無法限制 capacity ，因此即使他知道可能會有 realloc slice 的情況產生了，也無法阻止。
+
+2. 會需要改變 slice 長度的操作，不要依賴既有的 slice，建立一個新的 slice ，以及使用新的 slice 當作返回結果，感覺對於記憶體的使用上比較沒有效率，但是比起誤用造成的問題，應該是取其輕。
+
+    ```go
+    func Insert(x []interface{}, index int, items ...interface{}) []interface{} {
+    	return append(x[:index], append(items, x[index:]...)...)
+    }
+
+    func InsertByCopy(x []interface{}, index int, item interface{}) []interface{} {
+    	s := append(x, 0)
+    	copy(s[index+1:], s[index:])
+    	s[index] = item
+    	return s
+    }
+    ```
+
+3. 如果是要處理 Slice of Structs  的時候，可以嘗試使用 Slice of Pointers ，也就是只傳遞指標，而不是數據本身，如此一來即使 underlying array 的元素被複製了，也還是指向相同的數據，不過這個作法有好也有壞，稍後的章節會深入討論。
 
 ## Slice of pointers vs Slice of structs
+
+先來複習一下幾個 slice 使用上的情境
+
+**Example 1**
+
+```go
+// xs 被當作參數傳遞進去，裡面的 xs2 跟外面的 xs 其實是不同的
+// 不過因為 underlying array 一樣，所以 xs2[0] = 1 
+// 也讓外面的 xs 受到影響
+func main() {
+	xs := make([]int, 1, 3)
+
+	func(xs2 []int) {
+		xs2[0] = 1
+		fmt.Printf("Inside: %v Addr of slice: %p\n", xs2, &xs2)
+		// Inside: [1] Addr of slice: 0xc0000b6030
+	}(xs)
+
+	fmt.Printf("Outside: %v Addr of slice: %p\n", xs, &xs)
+	// Outside: [1] Addr of slice: 0xc0000b6018
+}
+```
+
+**Example 2**
+
+```go
+// 這個例子就可以很明顯的知道，當 append 啟動的時候，
+// 因為增加三個元素後，已經超過原本 slice 的 capacity
+// 所以 xs2 會呼叫 growslice 建立新的 underlying array ，並把當前的元素複製過去
+// 這個時候 xs 與 xs2 已經是參考到不同的 underlying array
+func main() {
+	xs := make([]int, 1, 3)
+
+	func(xs2 []int) {
+	    xs2 = append(xs2, 1,2,3)
+	    xs2[0] = 99
+			fmt.Printf("Inside: %v Addr of slice: %p\n", xs2, &xs2)
+			// Inside: [99 1 2 3] Addr of slice: 0xc00010c018
+	}(xs)
+
+	fmt.Printf("Outside: %v Addr of slice: %p\n", xs, &xs)
+	// Outside: [0] Addr of slice: 0xc00010c000
+
+}
+```
+
+example 1 說明了只要 underlying array 是一樣的，就不會有什麼問題
+
+example2 則是改變了 underlying array ，因此讓兩個 slice 彼此的行為脫鉤，不再互相影響
+
+以下來看看 struct 在 slice 中要注意的地方
+
+```go
+type Object struct {
+	Value int
+}
+
+func main() {
+    xo := []Object{
+            Object{0}, Object{1}, Object{2}, Object{3}, 
+        }
+    obj1 := xo[0]
+    obj1.Value = 21
+    fmt.Println(xo) // [{0} {1} {2} {3}]
+
+		fmt.Printf("Inside: %v Addr of slice: %p\n", obj1, &obj1)
+    fmt.Printf("Inside: %v Addr of slice: %p\n", xo[0], &xo[0])
+}
+```
+
+這個問題很簡單，因為 Golang 是 call by value ，所以 obj1 := xo[0] 是複製 xo[0] 的資料給 obj1，所以兩個的 ptr 也不同，改成以下的寫法即可
+
+```go
+// 使用指標
+obj2 := &xo[1]
+obj2.Value = 22
+fmt.Println(xo) // [{0} {22} {2} {3}]
+
+// 用 index 也可以
+xo[2].Value = 23
+fmt.Println(xo) // [{0} {22} {23} {3}]
+```
+
+在 slice 中使用 struct 要特別注意的地方大概是這樣。接著我們回到這一個章節的主題：**Slice of Pointers**
+
+當 slice 改變時候，裡面的 struct 也會被複製一份到新的 underlying array ，所以既使用了 &xo[0] 的指標也沒用，因為新的 slice 裡面的 struct 跟舊的是不同的
+
+```go
+xo := []Object{
+		Object{0}, Object{1}, Object{2}, Object{3},
+}
+
+obj1 := &xo[0]
+xo = append(xo, Object{4})
+obj1.Value = 21
+
+fmt.Println(xo) // [{0} {1} {2} {3} {4}]
+fmt.Printf("Inside: %v Addr of slice: %p\n", obj1, &obj1)
+// Inside: &{21} Addr of slice: 0xc000102018
+fmt.Printf("Inside: %v Addr of slice: %p\n", xo[0], &xo[0])
+// Inside: {0} Addr of slice: 0xc000116000
+```
+
+要怎麼解決這個問題呢？答案就是利用 Slice of Pointers，指標被複製了也沒關係，它們還是指向一個 underlying array。
+
+```go
+xop := []*Object{
+		&Object{0}, &Object{1}, &Object{2}, &Object{3},
+}
+
+obj2 := xop[0]
+xop = append(xop, &Object{4})
+obj2.Value = 21
+
+fmt.Printf("Inside: %v Addr of slice: %p\n", obj2, obj2)
+// Inside: &{21} Addr of slice: 0xc000018050
+fmt.Printf("Inside: %v Addr of slice: %p\n", xop[0], xop[0])
+// Inside: &{21} Addr of slice: 0xc000018050
+```
+
+[Kubernetes](https://github.com/kubernetes/apimachinery/blob/a644435e2c133d990b624858d9c01985d7f59adf/pkg/runtime/conversion.go#L56) 的 API 也運用了同樣的操作 ，不是直接拿 in []string ，而是指標，避免 in []string 被修改，而沒有反應在複製的參數中。
+
+```go
+func Convert_Slice_string_To_string(in *[]string, out *string, s conversion.Scope) error {
+	if len(*in) == 0 {
+		*out = ""
+		return nil
+	}
+	*out = (*in)[0]
+	return nil
+}
+```
+
+最後要注意使用在 struct slice 中，使用 Slice of Pointers 會比 Slice of Structs 的效率以及空間的使用上都會比較多一些，原因也很簡單，Slice of Pointers 比 Slice of Structs 還多了指標的建立以及儲存，所以如果你對於 Slice 內資料的一致性沒有這麼大的需求，其實改用 Slice of Struct ，以及要存取的時候，利用 index 來操作 struct 就好了，沒有必要一定要建立整個 Slice of Pointers。
+
+恩... 可以看到其實差別還蠻大的
+
+```go
+type Object struct {
+	Value int
+}
+
+func BenchmarkWithPointer(b *testing.B) {
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		xo := make([]*Object, 100)
+		for i:=0; i<100; i++ {
+			xo = append(xo, &Object{i})
+		}
+	}
+}
+
+func BenchmarkWithoutPointer(b *testing.B) {
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		xo := make([]Object, 100)
+		for i:=0; i<100; i++ {
+			xo = append(xo, Object{i})
+		}
+	}
+}
+
+// BenchmarkWithPointer-8      507992	   2068 ns/op	  2592 B/op	 101 allocs/op
+// BenchmarkWithoutPointer-8   3619908  370.8 ns/op	  1792 B/op	   1 allocs/op
+```
 
 ### Reference
 
