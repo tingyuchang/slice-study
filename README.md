@@ -45,13 +45,16 @@ array unsafe.Pointer 是一個指向 underlying array 內元素的指標，len �
 
 ```go
 a := [10]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+// underlying array is [1,2,3,4,5,6,7,8,9]
 b := a[3:6] // [3,4,5] len: 3 cap: 7
 c := a[3:] // [3,4,5,6,7,8,9] len: 7 cap: 7
 ```
 
-b 跟 c 都指向同一個 array，b = [3,4,5] c = [3,4,5,6,7,8,9]，len 分別是 3 跟 7 應該沒有問題，而兩者的 cap 都是 7 ，這是因為兩個 slice 都指向 underlying array a 的 index 3，而 a 的長度是 10，所以 10 - 3 = 7。
+b 跟 c 都指向同一個 underlying array，b = [3,4,5] c = [3,4,5,6,7,8,9]，len 分別是 3 跟 7 應該沒有問題，而兩者的 cap 都是 7 ，這是因為兩個 slice 都指向 underlying array a 的 index 3，而 a 的長度是 10，所以 10 - 3 = 7。
 
 ---
+
+Slice 的說明先到這邊，因為我比較想談的是後面的部分，如果對 Slice 還有基本定義或是使用上的疑慮，可以看官方的[介紹](https://blog.golang.org/slices-intro)。
 
 再來談談一些 slice 應用上的可能會有的疑惑
 
@@ -63,7 +66,7 @@ c := a[3:] // [3,4,5,6,7,8,9] len: 7 cap: 7
 b[3] = 20 // panic: runtime error: index out of range [3] with length 3
 ```
 
-雖然 b 的 cap 是 7 ，但是 len 只有 3 因此如果直接 assign [3] 會造成 panic error。那麼我們要怎麼擴充 b 呢？有三個方法： append, copy and re-slice
+雖然 b 的 cap 是 7 ，但是 len 只有 3 因此如果直接 assign [3] 會造成 panic error。那麼我們要怎麼擴充 b 呢？有三個方法： append, copy and re-slice (if capacity is enough)
 
 ```go
 // append
@@ -75,7 +78,7 @@ b2 := make([]int, len(b)+1)
 copy(b2. b)
 b2[len(b)] = item
 
-//re-slice
+//re-slice, attention! not over the capacity of b
 b = [:len(b)+1]
 b[len(b)] = item
 ```
@@ -94,7 +97,7 @@ b = append(b, 20)
 // a = [0,1,2,3,4,5,20.7,8,9]
 ```
 
-在 underlying array 有足夠的 capacity 下，會做一次的 re-slice 並將新的元素放置進去，因此 underlying array 中的元素就會被置換，連帶影響到其他指向這個 array 的 slices。
+在 underlying array 有足夠的 capacity 下，會將新的元素放進去，因此 underlying array 中的元素就會被置換，連帶影響到其他指向這個 array 的 slices，想是 c[3] 就變成了 20。
 
 但如果 underlying array 沒有足夠的 capacity 呢？ 請大家再看一段程式碼：
 
@@ -105,7 +108,9 @@ b = b[:cap(b)]
 // [3,4,5,6,7,8,9]
 ```
 
-想要知道其中運作的原理，要先從 [growslice](https://github.com/golang/go/blob/4bb0847b088eb3eb6122a18a87e1ca7756281dcc/src/runtime/slice.go#L162) 這一段 source code 來下手。
+為什麼 b 跟 c 的行為不一樣了呢？這是因為 c 的 append 發現 c 的 capacity 不夠了，因此觸發了 growslice 這一個 func ，重新產生了一組新的 underlying array 給他，這個時候 b, c 兩者的 underlying array 已經不同了。
+
+其中運作的原理，可以看看 [growslice](https://github.com/golang/go/blob/4bb0847b088eb3eb6122a18a87e1ca7756281dcc/src/runtime/slice.go#L162) 這一段 source code 
 
 ---
 
@@ -125,7 +130,8 @@ b = b[:cap(b)]
 
 計算完新的 cap 之後，就會把目前 array 內的元素複製到新的 array 中
 
-所以當 c 要擴充的時候，因為 underlying array 的 capacity 已經不夠了，因此重新產生了一組新的 underlying array 給他，這個時候 b, c 兩者的 underlying array 已經不同了。
+--- 
+接下來談談 slice 中傳遞資料的問題
 
 ## Call by Value
 
@@ -146,9 +152,9 @@ func double(x []int) {
 }
 ```
 
-在 Golang 的世界裡面都是 call by value ，slice 也不例外，但是為什麼上面的程式碼 double 卻會影響到 c 呢？這是因為在傳遞 b 給 double 的時候，的確是複製了一份 b 的值，但是 b 的 slice (struct) 只有 ptr, len 以及 cap ，並沒有真正的持有元素，而複製出來的 slice 也指向了同樣的 underlying array ，所以在 double 裡面修改了元素，就會影響到 c。 
+在 Golang 的世界裡面只要沒有用到指標，就都是 call by value ，slice 也不例外，但是為什麼上面的程式碼 double 卻會影響到 c 呢？這是因為在傳遞 b 給 double 的時候，的確是複製了一份 b 的值，但是 b 的 slice (struct) 只有 ptr, len 以及 cap ，並沒有真正的持有元素，而複製出來的 slice 也指向了同樣的 underlying array ，所以在 double 裡面修改了元素，就會影響到 c。 
 
-不過要利用這個特性必須要注意到改變 slice 的長度時 (append, re-slice or copy) 都會讓新的 slice 的 underlying array 變成新的，因此可能就會發生在新的 slice 中修改，但是其他地方的 slice 因為兩者的 underlying array 不一樣了，造成修改是無效的，要怎麼避免這個情況發生呢？可以參考以下的思考：
+要利用這個特性時，必須要注意到改變 slice 的長度時 (append, re-slice or copy) 都會讓 slice 的 underlying array 變成新的，因此可能就會發生在新的 slice 中修改，但是其他地方的 slice 因為兩者的 underlying array 不一樣了，造成修改是無效的，要怎麼有效的處理這個情況發生呢？可以參考以下的思考：
 
 1. 避免改變 slice ，當 slice 被當作參數傳遞之後，不嘗試做任何 len or cap 的修改，不讓 realloc 的情況發生，也許有人會認為只要熟悉 slice 的原理，小心操作就不會有這個問題產生，但是你要怎麼保證其他人不會踩到這個陷阱呢？請思考以下的程式碼：
 
@@ -164,7 +170,7 @@ func double(x []int) {
     	func(xs2 []int) {
     	    xs2 = xs2[1:3]
     	    // xs2 = append(xs2, 3)
-    			xs2[0] = 1
+    		xs2[0] = 1
     	    xs2[1] = 2
     	    xs2 = append(xs2, 3)
     		fmt.Printf("Inside: %v Addr of slice: %p\n", xs2, &xs2)		
@@ -178,7 +184,7 @@ func double(x []int) {
 
     函式的撰寫者無法限制 capacity ，因此即使他知道可能會有 realloc slice 的情況產生了，也無法阻止。
 
-2. 會需要改變 slice 長度的操作，不要依賴既有的 slice，建立一個新的 slice ，以及使用新的 slice 當作返回結果，感覺對於記憶體的使用上比較沒有效率，但是比起誤用造成的問題，應該是取其輕。
+2. 會需要改變 slice 長度的操作，不要依賴既有的 slice，建立一個新的 slice ，以及使用新的 slice 當作返回結果，感覺對於記憶體的使用上比較沒有效率，但是比起誤用造成的問題，應該是兩權相害取其輕，否則就需要更嚴格的規範使用的情境。
 
     ```go
     func Insert(x []interface{}, index int, items ...interface{}) []interface{} {
@@ -242,9 +248,9 @@ func main() {
 }
 ```
 
-example 1 說明了只要 underlying array 是一樣的，就不會有什麼問題
+example 1 說明了只要 underlying array 是一樣的，即使 slice 是不一樣的，也不會有什麼問題
 
-example2 則是改變了 underlying array ，因此讓兩個 slice 彼此的行為脫鉤，不再互相影響
+example2 則是改變了 underlying array ，因此讓兩個 slices 彼此的行為脫鉤，不再互相影響
 
 以下來看看 struct 在 slice 中要注意的地方
 
@@ -299,7 +305,7 @@ fmt.Printf("Inside: %v Addr of slice: %p\n", xo[0], &xo[0])
 // Inside: {0} Addr of slice: 0xc000116000
 ```
 
-要怎麼解決這個問題呢？答案就是利用 Slice of Pointers，指標被複製了也沒關係，它們還是指向一個 underlying array。
+要怎麼解決這個問題呢？答案就是利用 Slice of Pointers，指標被複製了也沒關係，它們還是指向同一個 struct。
 
 ```go
 xop := []*Object{
@@ -364,11 +370,66 @@ func BenchmarkWithoutPointer(b *testing.B) {
 // BenchmarkWithoutPointer-8   3619908  370.8 ns/op	  1792 B/op	   1 allocs/op
 ```
 
+BTW: 這裡提到的使用 Slice of Struct 比較好跟 [Struct Method 使用 Pointer 比較好](https://golang.org/doc/faq#methods_on_values_or_pointers)是不同的概念
+
+---
+
+### Insert: Append vs Copy
+
+上面有提到在 slice 中 insert 元素，有的時候 copy 會比 append 來得有效率，這其實是出自 [SliceTricks](https://github.com/golang/go/wiki/SliceTricks) 中的一段解釋:
+
+```go
+a = append(a[:i], append(b, a[i:]...)...)
+
+// The above one-line way copies a[i:] twice and
+// allocates at least once.
+// The following verbose way only copies elements
+// in a[i:] once and allocates at most once.
+// But, as of Go toolchain 1.16, due to lacking of
+// optimizations to avoid elements clearing in the
+// "make" call, the verbose way is not always faster.
+//
+// Future compiler optimizations might implement
+// both in the most efficient ways.
+//
+// Assume element type is int.
+func Insert(s []int, k int, vs ...int) []int {
+	if n := len(s) + len(vs); n <= cap(s) {
+		s2 := s[:n]
+		copy(s2[k+len(vs):], s[k:])
+		copy(s2[k:], vs)
+		return s2
+	}
+	s2 := make([]int, len(s) + len(vs))
+	copy(s2, s[:k])
+	copy(s2[k:], vs)
+	copy(s2[k+len(vs):], s[k:])
+	return s2
+}
+
+a = Insert(a, i, b...)
+```
+
+append 觸發了兩次的 realloc ，而 copy  只有在 cap 不足，重新宣告 s2 的時候做了一次，如果 capacity 是夠了，那麼連一次的 realloc 都沒做
+
+```go
+BenchmarkInsertByAppend-8   	 3905568	       295.0 ns/op	     672 B/op	       2 allocs/op
+BenchmarkInsertByCopy-8     	 7681284	       156.8 ns/op	     352 B/op	       1 allocs/op
+```
+
+### 結論：（寫在最後面就是希望不要只看結論，要看程式碼去理解）
+
+1. 使用 slice 的時候，必須充分理解跟 underlying array 之間的關係，slice 不持有元素，只持有指標
+2. Append, copy 都可能會改變 slice 的 capacity 導致 realloc ，re-slice 只能改變 length of slice 
+3. 一旦發生了 slice realloc ，就會把現有的 underlying array 的資料複製到新的 underlying array 
+4. 在 slice 中使用 pointer  ([]*Object)是個好方法，但是要注意在 struct of slice 上其效能的消耗
+5. 直接傳遞 slice 的指標 (*[]Object) 也是不錯，可以參考 k8s 的做法
+6. Copy 處理得好，會比 Append 來得有效率 
+
 ### Reference
 
 - https://blog.golang.org/slices-intro
-- https://github.com/golang/go/wiki/SliceTricks
+- [https://github.com/golang/go/wiki/SliceTricks](https://github.com/golang/go/wiki/SliceTricks)
 - [https://medium.com/swlh/golang-tips-why-pointers-to-slices-are-useful-and-how-ignoring-them-can-lead-to-tricky-bugs-cac90f72e77b](https://medium.com/swlh/golang-tips-why-pointers-to-slices-are-useful-and-how-ignoring-them-can-lead-to-tricky-bugs-cac90f72e77b)
 - [https://medium.com/@opto_ej/there-are-other-nuances-one-should-consider-c798f12be15c](https://medium.com/@opto_ej/there-are-other-nuances-one-should-consider-c798f12be15c)
 - [https://philpearl.github.io/post/bad_go_slice_of_pointers/](https://philpearl.github.io/post/bad_go_slice_of_pointers/)
--
