@@ -4,7 +4,7 @@ import "testing"
 
 func BenchmarkCut(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		Cut(2,8, xi)
+		Cut(2, 8, xi)
 	}
 }
 

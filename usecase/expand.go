@@ -40,7 +40,7 @@ func Insert2(x []interface{}, index int, items ...interface{}) []interface{} {
 		copy(s2[index:], items)
 		return s2
 	}
-	s2 := make([]interface{}, len(x) + len(items))
+	s2 := make([]interface{}, len(x)+len(items))
 	copy(s2, x[:index])
 	copy(s2[index:], items)
 	copy(s2[index+len(items):], x[index:])

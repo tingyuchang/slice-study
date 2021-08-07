@@ -2,7 +2,7 @@ package usecase
 
 // Pop return latest item in slice
 func Pop(x []interface{}) (interface{}, []interface{}) {
-	return x[len(x)-1] , x[:len(x)-1]
+	return x[len(x)-1], x[:len(x)-1]
 }
 
 // Push insert item at latest in slice

@@ -8,7 +8,7 @@ import (
 // Reverse is using reverse loop to switch items (but not efficient)
 func Reverse(x []interface{}) []interface{} {
 	s := make([]interface{}, len(x))
-	for i:=len(x)-1; i >=0; i-- {
+	for i := len(x) - 1; i >= 0; i-- {
 		s[len(x)-1-i] = x[i]
 	}
 	return s
@@ -27,8 +27,8 @@ func Reverse2(x []interface{}) []interface{} {
 
 // Shuffling assign random new index for each item in slice
 func Shuffling(x []interface{}) []interface{} {
-	for i := len(x)-1; i>0; i-- {
-		j := rand.Intn(i+1)
+	for i := len(x) - 1; i > 0; i-- {
+		j := rand.Intn(i + 1)
 		x[i], x[j] = x[j], x[i]
 	}
 	return x
@@ -37,8 +37,8 @@ func Shuffling(x []interface{}) []interface{} {
 // Batch is useful when we must to handle huge amount slice
 func Batch(x []interface{}, batchSize int) [][]interface{} {
 	s := make([][]interface{}, (len(x)+batchSize-1)/batchSize)
-	for i,v := range x {
-		quotient := i/batchSize
+	for i, v := range x {
+		quotient := i / batchSize
 		s[quotient] = append(s[quotient], v)
 	}
 	return s
@@ -67,7 +67,7 @@ func Dedupalicate(x []int) []int {
 	sort.Ints(x)
 	j := 0
 
-	for i := 1; i< len(x); i++ {
+	for i := 1; i < len(x); i++ {
 		if x[i] == x[j] {
 			continue
 		}
@@ -90,7 +90,7 @@ func MoveToFront(needle string, haystack []string) []string {
 		haystack[i] = prev
 		if elem == needle {
 			return haystack
- 		} else {
+		} else {
 			prev = elem
 		}
 	}
@@ -108,4 +108,3 @@ func SlidingWindow(size int, input []int) [][]int {
 	}
 	return r
 }
-

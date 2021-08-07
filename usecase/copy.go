@@ -8,10 +8,11 @@ func CopyByCopy(x []interface{}) []interface{} {
 }
 
 // CopyByAppend using create nil slice and append source data into it
-func CopyByAppend(x []interface{}) [] interface{} {
+func CopyByAppend(x []interface{}) []interface{} {
 	return append([]interface{}{nil}, x...)
 }
+
 // CopyByAppendReSlice using re-slice [i:j:k]
-func CopyByAppendReSlice(x []interface{}) [] interface{} {
+func CopyByAppendReSlice(x []interface{}) []interface{} {
 	return append(x[:0:0], x...)
 }

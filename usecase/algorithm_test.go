@@ -17,12 +17,12 @@ func TestReverse(t *testing.T) {
 		{
 			name: "Basic Reverse",
 			args: args{
-				[]interface{} {
-					1,2,3,4,5,6,7,8,9,
+				[]interface{}{
+					1, 2, 3, 4, 5, 6, 7, 8, 9,
 				},
 			},
 			want: []interface{}{
-				9,8,7,6,5,4,3,2,1,
+				9, 8, 7, 6, 5, 4, 3, 2, 1,
 			},
 		},
 	}
@@ -47,12 +47,12 @@ func TestReverse2(t *testing.T) {
 		{
 			name: "Switch Reverse",
 			args: args{
-				[]interface{} {
-					1,2,3,4,5,6,7,8,9,
+				[]interface{}{
+					1, 2, 3, 4, 5, 6, 7, 8, 9,
 				},
 			},
 			want: []interface{}{
-				9,8,7,6,5,4,3,2,1,
+				9, 8, 7, 6, 5, 4, 3, 2, 1,
 			},
 		},
 	}
@@ -78,11 +78,11 @@ func TestShuffling(t *testing.T) {
 			"Shuffle Test",
 			args{
 				[]interface{}{
-					1,2,3,4,5,6,7,8,9,
+					1, 2, 3, 4, 5, 6, 7, 8, 9,
 				},
 			},
 			[]interface{}{
-				1,2,3,4,5,6,7,8,9,
+				1, 2, 3, 4, 5, 6, 7, 8, 9,
 			},
 		},
 	}
@@ -108,16 +108,16 @@ func TestBatch(t *testing.T) {
 		{
 			name: "Test for Batch slice",
 			args: args{
-				x: []interface{} {
-					1,2,3,4,5,6,7,8,9,10,
+				x: []interface{}{
+					1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
 				},
 				batchSize: 3,
 			},
 			want: [][]interface{}{
-				[]interface{}{1,2,3},
-				[]interface{}{4,5,6},
-				[]interface{}{7,8,9},
-				[]interface{}{10},
+				{1, 2, 3},
+				{4, 5, 6},
+				{7, 8, 9},
+				{10},
 			},
 		},
 	}
@@ -143,16 +143,16 @@ func TestBatch2(t *testing.T) {
 		{
 			name: "Test for Batch slice",
 			args: args{
-				x: []interface{} {
-					1,2,3,4,5,6,7,8,9,10,
+				x: []interface{}{
+					1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
 				},
 				batchSize: 3,
 			},
 			want: [][]interface{}{
-				[]interface{}{1,2,3},
-				[]interface{}{4,5,6},
-				[]interface{}{7,8,9},
-				[]interface{}{10},
+				{1, 2, 3},
+				{4, 5, 6},
+				{7, 8, 9},
+				{10},
 			},
 		},
 	}
@@ -165,28 +165,27 @@ func TestBatch2(t *testing.T) {
 	}
 }
 
-
 func BenchmarkReverse(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		Reverse([]interface{}{1,2,3,4,5,6,7,8,9,10})
+		Reverse([]interface{}{1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
 	}
 }
 
 func BenchmarkReverse2(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		Reverse2([]interface{}{1,2,3,4,5,6,7,8,9,10})
+		Reverse2([]interface{}{1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
 	}
 }
 
 func BenchmarkBatch(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		Batch([]interface{}{1,2,3,4,5,6,7,8,9,10}, 3)
+		Batch([]interface{}{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, 3)
 	}
 }
 
 func BenchmarkBatch2(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		Batch2([]interface{}{1,2,3,4,5,6,7,8,9,10}, 3)
+		Batch2([]interface{}{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, 3)
 	}
 }
 
@@ -202,10 +201,10 @@ func TestDedupalicate(t *testing.T) {
 		{
 			name: "Test for de-duplicate",
 			args: args{
-				[]int{3,2,3,2,4,2,3,1,2,3,4,4,2,5,6,7,2,6,4},
+				[]int{3, 2, 3, 2, 4, 2, 3, 1, 2, 3, 4, 4, 2, 5, 6, 7, 2, 6, 4},
 			},
 			want: []int{
-				1,2,3,4,5,6,7,
+				1, 2, 3, 4, 5, 6, 7,
 			},
 		},
 	}
@@ -220,7 +219,7 @@ func TestDedupalicate(t *testing.T) {
 
 func BenchmarkDedupalicate(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		Dedupalicate([]int{3,2,3,2,4,2,3,1,2,3,4,4,2,5,6,7,2,6,4})
+		Dedupalicate([]int{3, 2, 3, 2, 4, 2, 3, 1, 2, 3, 4, 4, 2, 5, 6, 7, 2, 6, 4})
 	}
 }
 
@@ -237,7 +236,7 @@ func TestMoveToFront(t *testing.T) {
 		{
 			name: "Test move to front",
 			args: args{
-				needle: "c",
+				needle:   "c",
 				haystack: []string{"a", "b", "c", "d", "e"},
 			},
 			want: []string{"c", "a", "b", "d", "e"},
